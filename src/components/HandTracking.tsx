@@ -2,7 +2,8 @@
 import { useRef, useEffect, useState } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as handpose from '@tensorflow-models/handpose';
-import { drawHand, HandPose } from '../utils/draw-hand';
+import { drawHand, HandPose, convertAnnotationsToKeypoints } from '../utils/draw-hand';
+import { Loader2 } from 'lucide-react';
 
 interface HandTrackingProps {
   isActive: boolean;
@@ -12,6 +13,8 @@ export function HandTracking({ isActive }: HandTrackingProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [modelLoaded, setModelLoaded] = useState(false);
   
   useEffect(() => {
     const runHandpose = async () => {
@@ -24,11 +27,15 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       }
       
       try {
+        setLoading(true);
+        
         // Load the handpose model
         const net = await handpose.load({
           detectionConfidence: 0.7,
           maxContinuousChecks: 20,
         });
+        
+        setModelLoaded(true);
         
         // Access the webcam
         const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -42,6 +49,8 @@ export function HandTracking({ isActive }: HandTrackingProps) {
           videoRef.current.srcObject = stream;
           setStream(stream);
         }
+        
+        setLoading(false);
         
         // Detect hands
         const detect = async () => {
@@ -71,7 +80,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
                     y: point[1],
                     z: point[2]
                   })),
-                  annotations: predictions[0].annotations
+                  annotations: convertAnnotationsToKeypoints(predictions[0].annotations)
                 };
                 
                 // Draw the landmarks
@@ -94,6 +103,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         
       } catch (error) {
         console.error("Error in handpose setup:", error);
+        setLoading(false);
       }
     };
     
@@ -107,7 +117,14 @@ export function HandTracking({ isActive }: HandTrackingProps) {
   }, [isActive]);
   
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full overflow-hidden rounded-xl border border-white/20 bg-gradient-to-br from-gray-900/60 to-gray-900/80 backdrop-blur-md">
+      {loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 z-10">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+          <p className="text-sm text-white">{modelLoaded ? 'Accessing camera...' : 'Loading hand tracking model...'}</p>
+        </div>
+      )}
+      
       <video
         ref={videoRef}
         className="absolute top-0 left-0 h-full w-full object-cover rounded-lg"
@@ -120,8 +137,11 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         className="absolute top-0 left-0 h-full w-full object-cover rounded-lg"
       />
       {!isActive && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 rounded-lg">
-          <p className="text-white text-xl font-hands">Camera Off</p>
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 rounded-lg backdrop-blur-sm">
+          <div className="text-center">
+            <p className="text-white text-xl font-hands mb-2">Camera Off</p>
+            <p className="text-white/70 text-sm">Click the camera icon to start tracking</p>
+          </div>
         </div>
       )}
     </div>
