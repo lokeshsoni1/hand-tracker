@@ -16,7 +16,7 @@ export function ProfileSection() {
               <Avatar className="w-full h-full">
                 {!imageError ? (
                   <AvatarImage 
-                    src="/lokesh-profile.jpg" 
+                    src="/lovable-uploads/f48342e9-533a-4e5a-a5e3-0885b98a58dd.png" 
                     alt="Lokesh Soni"
                     onError={() => setImageError(true)}
                     className="w-full h-full object-cover"
@@ -35,7 +35,7 @@ export function ProfileSection() {
           
           <div className="text-center md:text-left flex-1">
             <div className="mb-4">
-              <h2 className="text-2xl font-bold mb-1">Lokesh Soni</h2>
+              <h2 className="text-2xl font-bold mb-1 text-gradient">Lokesh Soni</h2>
               <p className="text-sm text-muted-foreground mb-1">Hand Tracking Enthusiast</p>
               <div className="h-1 w-20 md:mx-0 mx-auto bg-gradient-to-r from-primary to-purple-400 rounded-full"></div>
             </div>

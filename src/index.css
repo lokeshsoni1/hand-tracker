@@ -98,4 +98,48 @@
   .blur-backdrop {
     backdrop-filter: blur(8px);
   }
+  
+  .glass-morphism {
+    @apply backdrop-blur-xl bg-white/5 border border-white/10 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.3)];
+  }
+  
+  .neo-blur {
+    @apply backdrop-blur-2xl bg-black/40 border border-white/10;
+  }
+  
+  /* Cyberpunk theme */
+  .cyberpunk-text {
+    @apply bg-gradient-to-r from-yellow-300 to-pink-500 bg-clip-text text-transparent;
+    text-shadow: 0 0 5px rgba(255, 105, 180, 0.5);
+  }
+  
+  /* Neon theme */
+  .neon-text {
+    @apply bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent;
+    text-shadow: 0 0 8px rgba(80, 250, 123, 0.6);
+  }
+  
+  /* Gradient theme */
+  .gradient-text {
+    @apply bg-gradient-to-r from-yellow-200 to-yellow-500 bg-clip-text text-transparent;
+    text-shadow: 0 0 3px rgba(254, 215, 170, 0.3);
+  }
+  
+  .animated-gradient {
+    background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+  }
+
+  @keyframes gradient {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
 }

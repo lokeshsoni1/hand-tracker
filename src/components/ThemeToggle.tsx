@@ -15,7 +15,9 @@ export function ThemeToggle() {
             variant="outline"
             size="icon"
             onClick={toggleTheme}
-            className="transition-all duration-300 hover:bg-primary/20"
+            className={`transition-all duration-300 ${theme === 'dark' ? 
+              'bg-primary/20 hover:bg-primary/30 border-primary/50' : 
+              'hover:bg-primary/20'}`}
           >
             {theme === 'light' ? (
               <Moon className="h-5 w-5" />

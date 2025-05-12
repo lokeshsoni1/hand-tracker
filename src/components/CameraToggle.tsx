@@ -13,41 +13,32 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
   const [isActive, setIsActive] = useState(false);
   const { toast } = useToast();
 
-  const toggleCamera = () => {
-    const newState = !isActive;
-    setIsActive(newState);
-    onToggle(newState);
-    
-    toast({
-      title: newState ? "Camera activated" : "Camera deactivated",
-      description: newState ? "Hand tracking is now active" : "Hand tracking is now disabled",
-      duration: 2000,
-    });
-  };
-
-  // Request permission immediately when component loads
-  useEffect(() => {
-    const checkCameraPermission = async () => {
-      try {
-        // Just check if we can access the camera, don't actually use it yet
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const hasCamera = devices.some(device => device.kind === 'videoinput');
-        
-        if (!hasCamera) {
-          toast({
-            title: "No camera detected",
-            description: "Please connect a camera to use hand tracking",
-            variant: "destructive",
-            duration: 5000,
-          });
-        }
-      } catch (error) {
-        console.error("Error checking camera:", error);
+  const toggleCamera = async () => {
+    try {
+      // Request camera permission explicitly before toggling
+      if (!isActive) {
+        await navigator.mediaDevices.getUserMedia({ video: true });
       }
-    };
-    
-    checkCameraPermission();
-  }, [toast]);
+      
+      const newState = !isActive;
+      setIsActive(newState);
+      onToggle(newState);
+      
+      toast({
+        title: newState ? "Camera activated" : "Camera deactivated",
+        description: newState ? "Hand tracking is now active" : "Hand tracking is now disabled",
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error("Error accessing camera:", error);
+      toast({
+        title: "Camera access denied",
+        description: "Please allow camera access to use hand tracking",
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
+  };
 
   return (
     <TooltipProvider>

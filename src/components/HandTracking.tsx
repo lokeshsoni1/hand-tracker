@@ -46,12 +46,14 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       }
     };
     
-    loadModel();
+    if (isActive) {
+      loadModel();
+    }
     
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isActive]);
   
   // Handle camera activation/deactivation
   useEffect(() => {
@@ -65,8 +67,6 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         }
         return;
       }
-      
-      if (!model) return;
       
       try {
         setLoading(true);
@@ -86,6 +86,16 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         if (videoRef.current) {
           videoRef.current.srcObject = videoStream;
           setStream(videoStream);
+        }
+        
+        // Only start loading model after camera is ready
+        if (!model) {
+          const handModel = await handpose.load({
+            detectionConfidence: 0.7,
+            maxContinuousChecks: 20,
+          });
+          setModel(handModel);
+          setModelLoaded(true);
         }
         
         setLoading(false);
