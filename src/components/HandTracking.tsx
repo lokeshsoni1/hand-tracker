@@ -2,7 +2,7 @@
 import { useRef, useEffect, useState } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as handpose from '@tensorflow-models/handpose';
-import { drawHand } from '../utils/draw-hand';
+import { drawHand, HandPose } from '../utils/draw-hand';
 
 interface HandTrackingProps {
   isActive: boolean;
@@ -56,16 +56,26 @@ export function HandTracking({ isActive }: HandTrackingProps) {
           
           // Get hand predictions
           try {
-            const hands = await net.estimateHands(video);
+            const predictions = await net.estimateHands(video);
             
             // Draw hand landmarks
             const ctx = canvas.getContext('2d');
             if (ctx) {
               ctx.clearRect(0, 0, canvas.width, canvas.height);
               
-              if (hands.length > 0) {
-                // We're only interested in the first hand
-                drawHand(hands[0], ctx);
+              if (predictions.length > 0) {
+                // Convert to our HandPose interface
+                const hand: HandPose = {
+                  landmarks: predictions[0].landmarks.map((point: number[]) => ({
+                    x: point[0],
+                    y: point[1],
+                    z: point[2]
+                  })),
+                  annotations: predictions[0].annotations
+                };
+                
+                // Draw the landmarks
+                drawHand(hand, ctx);
               }
             }
           } catch (error) {

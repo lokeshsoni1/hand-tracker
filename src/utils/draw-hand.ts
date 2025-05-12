@@ -5,7 +5,7 @@ interface Keypoint {
   z: number;
 }
 
-interface HandPose {
+export interface HandPose {
   landmarks: Keypoint[];
   annotations: Record<string, Keypoint[]>;
 }
