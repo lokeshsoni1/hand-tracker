@@ -15,9 +15,49 @@ export function HandTracking({ isActive }: HandTrackingProps) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [loading, setLoading] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [model, setModel] = useState<handpose.HandPose | null>(null);
   
+  // Load the model once when component mounts
   useEffect(() => {
-    const runHandpose = async () => {
+    let isMounted = true;
+    
+    const loadModel = async () => {
+      try {
+        setLoading(true);
+        console.log("Loading handpose model...");
+        
+        // Load the handpose model
+        const handModel = await handpose.load({
+          detectionConfidence: 0.7,
+          maxContinuousChecks: 20,
+        });
+        
+        if (isMounted) {
+          console.log("Model loaded successfully");
+          setModel(handModel);
+          setModelLoaded(true);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Error loading model:", error);
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    loadModel();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+  
+  // Handle camera activation/deactivation
+  useEffect(() => {
+    let animationFrameId: number;
+    
+    const setupCamera = async () => {
       if (!isActive) {
         if (stream) {
           stream.getTracks().forEach(track => track.stop());
@@ -26,95 +66,100 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         return;
       }
       
+      if (!model) return;
+      
       try {
         setLoading(true);
         
-        // Load the handpose model
-        const net = await handpose.load({
-          detectionConfidence: 0.7,
-          maxContinuousChecks: 20,
-        });
-        
-        setModelLoaded(true);
-        
         // Access the webcam
-        const stream = await navigator.mediaDevices.getUserMedia({ 
+        console.log("Requesting camera access...");
+        const videoStream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             width: 640, 
-            height: 480 
+            height: 480,
+            facingMode: "user"
           } 
         });
         
+        console.log("Camera access granted");
+        
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          setStream(stream);
+          videoRef.current.srcObject = videoStream;
+          setStream(videoStream);
         }
         
         setLoading(false);
-        
-        // Detect hands
-        const detect = async () => {
-          if (!videoRef.current || !canvasRef.current || !isActive) return;
-          
-          const video = videoRef.current;
-          const canvas = canvasRef.current;
-          
-          // Set canvas dimensions to match video
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          
-          // Get hand predictions
-          try {
-            const predictions = await net.estimateHands(video);
-            
-            // Draw hand landmarks
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              
-              if (predictions.length > 0) {
-                // Convert to our HandPose interface
-                const hand: HandPose = {
-                  landmarks: predictions[0].landmarks.map((point: number[]) => ({
-                    x: point[0],
-                    y: point[1],
-                    z: point[2]
-                  })),
-                  annotations: convertAnnotationsToKeypoints(predictions[0].annotations)
-                };
-                
-                // Draw the landmarks
-                drawHand(hand, ctx);
-              }
-            }
-          } catch (error) {
-            console.error("Hand detection error:", error);
-          }
-          
-          // Continue detecting if active
-          if (isActive) {
-            requestAnimationFrame(detect);
-          }
-        };
-        
-        videoRef.current.addEventListener('loadeddata', () => {
-          detect();
-        });
-        
       } catch (error) {
-        console.error("Error in handpose setup:", error);
+        console.error("Error accessing camera:", error);
         setLoading(false);
       }
     };
     
-    runHandpose();
+    setupCamera();
     
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+    // Detect hands
+    const detect = async () => {
+      if (!videoRef.current || !canvasRef.current || !model || !isActive) return;
+      
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      // Make sure video is ready
+      if (video.readyState !== 4) {
+        animationFrameId = requestAnimationFrame(detect);
+        return;
+      }
+      
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Get hand predictions
+      try {
+        const predictions = await model.estimateHands(video);
+        
+        // Draw hand landmarks
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          if (predictions.length > 0) {
+            // Convert to our HandPose interface
+            const hand: HandPose = {
+              landmarks: predictions[0].landmarks.map((point: number[]) => ({
+                x: point[0],
+                y: point[1],
+                z: point[2]
+              })),
+              annotations: convertAnnotationsToKeypoints(predictions[0].annotations)
+            };
+            
+            // Draw the landmarks
+            drawHand(hand, ctx);
+          }
+        }
+      } catch (error) {
+        console.error("Hand detection error:", error);
+      }
+      
+      // Continue detecting if active
+      if (isActive) {
+        animationFrameId = requestAnimationFrame(detect);
       }
     };
-  }, [isActive]);
+    
+    if (isActive && model && videoRef.current) {
+      videoRef.current.addEventListener('loadeddata', () => {
+        detect();
+      });
+    }
+    
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [isActive, model]);
   
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border border-white/20 bg-gradient-to-br from-gray-900/60 to-gray-900/80 backdrop-blur-md">

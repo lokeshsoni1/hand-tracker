@@ -1,8 +1,9 @@
 
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Camera, CameraOff } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/use-toast";
 
 interface CameraToggleProps {
   onToggle: (isActive: boolean) => void;
@@ -10,12 +11,43 @@ interface CameraToggleProps {
 
 export function CameraToggle({ onToggle }: CameraToggleProps) {
   const [isActive, setIsActive] = useState(false);
+  const { toast } = useToast();
 
   const toggleCamera = () => {
     const newState = !isActive;
     setIsActive(newState);
     onToggle(newState);
+    
+    toast({
+      title: newState ? "Camera activated" : "Camera deactivated",
+      description: newState ? "Hand tracking is now active" : "Hand tracking is now disabled",
+      duration: 2000,
+    });
   };
+
+  // Request permission immediately when component loads
+  useEffect(() => {
+    const checkCameraPermission = async () => {
+      try {
+        // Just check if we can access the camera, don't actually use it yet
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasCamera = devices.some(device => device.kind === 'videoinput');
+        
+        if (!hasCamera) {
+          toast({
+            title: "No camera detected",
+            description: "Please connect a camera to use hand tracking",
+            variant: "destructive",
+            duration: 5000,
+          });
+        }
+      } catch (error) {
+        console.error("Error checking camera:", error);
+      }
+    };
+    
+    checkCameraPermission();
+  }, [toast]);
 
   return (
     <TooltipProvider>
@@ -25,7 +57,9 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
             variant="outline"
             size="icon"
             onClick={toggleCamera}
-            className="transition-all duration-300 hover:bg-primary/20"
+            className={`transition-all duration-300 ${isActive ? 
+              'bg-primary/20 hover:bg-primary/30' : 
+              'hover:bg-primary/20'}`}
           >
             {isActive ? (
               <CameraOff className="h-5 w-5" />
