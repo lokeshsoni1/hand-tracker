@@ -5,6 +5,7 @@ import * as handpose from '@tensorflow-models/handpose';
 import { drawHand, HandPose, convertAnnotationsToKeypoints } from '../utils/draw-hand';
 import { Loader2 } from 'lucide-react';
 import { DigitalBulb } from './DigitalBulb';
+import { toast } from 'sonner';
 
 interface HandTrackingProps {
   isActive: boolean;
@@ -20,7 +21,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
   const [fingerCount, setFingerCount] = useState(0);
   const [bulbBrightness, setBulbBrightness] = useState<'off' | 'half' | 'full'>('off');
   
-  // Load the model once component mounts
+  // Load the model only once when component mounts
   useEffect(() => {
     let isMounted = true;
     
@@ -32,8 +33,8 @@ export function HandTracking({ isActive }: HandTrackingProps) {
           
           // Load the handpose model
           const handModel = await handpose.load({
-            detectionConfidence: 0.7,
-            maxContinuousChecks: 20,
+            detectionConfidence: 0.8,
+            maxContinuousChecks: 10,
           });
           
           if (isMounted) {
@@ -41,62 +42,79 @@ export function HandTracking({ isActive }: HandTrackingProps) {
             setModel(handModel);
             setModelLoaded(true);
             setLoading(false);
+            toast.success("Hand tracking model loaded");
           }
         }
       } catch (error) {
         console.error("Error loading model:", error);
         if (isMounted) {
           setLoading(false);
+          toast.error("Failed to load hand tracking model");
         }
       }
     };
     
-    if (isActive) {
-      loadModel();
-    }
+    loadModel();
     
     return () => {
       isMounted = false;
     };
-  }, [isActive, modelLoaded]);
+  }, [modelLoaded]);
   
   // Handle camera activation/deactivation
   useEffect(() => {
     let animationFrameId: number;
+    let isCameraMounted = true;
     
     const setupCamera = async () => {
-      if (!isActive) {
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-          setStream(null);
-        }
-        return;
+      // Clean up previous stream if exists
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
       }
+      
+      if (!isActive) return;
       
       try {
         setLoading(true);
         
-        // Access the webcam
+        // Access the webcam with specific constraints to avoid flipping issues
         console.log("Requesting camera access...");
         const videoStream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
-            width: 640, 
-            height: 480,
+            width: { ideal: 640 },
+            height: { ideal: 480 },
             facingMode: "user"
           } 
         });
+        
+        if (!isCameraMounted) {
+          videoStream.getTracks().forEach(track => track.stop());
+          return;
+        }
         
         console.log("Camera access granted");
         
         if (videoRef.current) {
           videoRef.current.srcObject = videoStream;
+          videoRef.current.onloadedmetadata = () => {
+            if (videoRef.current) {
+              videoRef.current.play().then(() => {
+                console.log("Video is playing");
+                setLoading(false);
+              }).catch(err => {
+                console.error("Error playing video:", err);
+                setLoading(false);
+                toast.error("Failed to start video stream");
+              });
+            }
+          };
           setStream(videoStream);
         }
-        
-        setLoading(false);
       } catch (error) {
         console.error("Error accessing camera:", error);
         setLoading(false);
+        toast.error("Camera access failed");
       }
     };
     
@@ -116,8 +134,8 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       const wristX = landmarks[0].x;
       
       // Check if thumb is extended based on x position relative to wrist
-      if ((wristX < thumbBaseX && thumbTipX < thumbBaseX) || 
-          (wristX > thumbBaseX && thumbTipX > thumbBaseX)) {
+      const thumbDiff = Math.abs(thumbTipX - thumbBaseX);
+      if (thumbDiff > 0.05) {
         count++;
       }
       
@@ -127,7 +145,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         const baseY = landmarks[fingerBases[i]].y;
         
         // If tip is higher than base (y decreases upward in image coordinates)
-        if (tipY < baseY - 0.05) { // Adding threshold to avoid false positives
+        if (tipY < baseY - 0.07) { // Increased threshold to avoid false positives
           count++;
         }
       }
@@ -173,6 +191,8 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Don't mirror the camera feed - let the skeleton overlay on the actual video
           
           if (predictions.length > 0) {
             // Convert to our HandPose interface
@@ -220,6 +240,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
     }
     
     return () => {
+      isCameraMounted = false;
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
@@ -241,13 +262,12 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         autoPlay
         playsInline
         muted
-        onCanPlay={() => {
-          console.log("Video can play, dimensions:", videoRef.current?.videoWidth, videoRef.current?.videoHeight);
-        }}
+        style={{ transform: "scaleX(-1)" }} /* Mirror the video horizontally */
       />
       <canvas
         ref={canvasRef}
         className="absolute top-0 left-0 h-full w-full object-cover rounded-lg"
+        style={{ transform: "scaleX(-1)" }} /* Mirror the canvas to match the video */
       />
       
       {/* Finger count display */}
@@ -257,7 +277,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         </div>
       )}
       
-      {/* Digital Bulb - Now more prominent */}
+      {/* Digital Bulb */}
       {isActive && !loading && (
         <DigitalBulb brightness={bulbBrightness} />
       )}

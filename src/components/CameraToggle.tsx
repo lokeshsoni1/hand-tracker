@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { Camera, CameraOff } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 
 interface CameraToggleProps {
@@ -12,31 +11,15 @@ interface CameraToggleProps {
 
 export function CameraToggle({ onToggle }: CameraToggleProps) {
   const [isActive, setIsActive] = useState(false);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const { toast: uiToast } = useToast();
-
-  // Check camera permissions on component mount
-  useEffect(() => {
-    const checkCameraPermission = async () => {
-      try {
-        // Request camera permission explicitly
-        const permissions = await navigator.permissions.query({ name: 'camera' as PermissionName });
-        setHasPermission(permissions.state === 'granted');
-        
-        permissions.onchange = () => {
-          setHasPermission(permissions.state === 'granted');
-        };
-      } catch (error) {
-        console.log('Permissions API not supported, will check on toggle');
-      }
-    };
-    
-    checkCameraPermission();
-  }, []);
+  const [isLoading, setIsLoading] = useState(false);
 
   const toggleCamera = async () => {
     try {
-      // Request camera permission explicitly before toggling
+      // Already in process of toggling
+      if (isLoading) return;
+      
+      setIsLoading(true);
+      
       if (!isActive) {
         // Show requesting permission toast
         toast.loading("Requesting camera access...", {
@@ -44,35 +27,34 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
           duration: 10000
         });
         
-        const stream = await navigator.mediaDevices.getUserMedia({ 
+        // Request camera permission explicitly
+        await navigator.mediaDevices.getUserMedia({ 
           video: { 
             width: 640, 
             height: 480,
             facingMode: "user"
           } 
-        });
-        
-        // Dismiss requesting permission toast
-        toast.dismiss("camera-permission");
-        
-        // If we got here, permission was granted
-        setHasPermission(true);
-        
-        // Stop this temporary stream since the HandTracking component will request its own
-        stream.getTracks().forEach(track => track.stop());
-        
-        const newState = true;
-        setIsActive(newState);
-        onToggle(newState);
-        
-        toast.success("Camera activated", {
-          description: "Hand tracking is now active"
+        }).then(stream => {
+          // Stop this temporary stream
+          stream.getTracks().forEach(track => track.stop());
+          
+          // Dismiss loading toast
+          toast.dismiss("camera-permission");
+          
+          // Update state
+          setIsActive(true);
+          onToggle(true);
+          
+          toast.success("Camera activated", {
+            description: "Hand tracking is now active"
+          });
+        }).catch(error => {
+          throw error;
         });
       } else {
         // Turn off camera
-        const newState = false;
-        setIsActive(newState);
-        onToggle(newState);
+        setIsActive(false);
+        onToggle(false);
         
         toast.info("Camera deactivated", {
           description: "Hand tracking is now disabled"
@@ -80,7 +62,6 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
       }
     } catch (error) {
       console.error("Error accessing camera:", error);
-      setHasPermission(false);
       
       // Dismiss requesting permission toast
       toast.dismiss("camera-permission");
@@ -89,6 +70,8 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
         description: "Please allow camera access to use hand tracking",
         duration: 5000,
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -100,11 +83,14 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
             variant="outline"
             size="icon"
             onClick={toggleCamera}
-            className={`transition-all duration-300 ${isActive ? 
-              'bg-primary/20 hover:bg-primary/30 border-primary/50' : 
-              'hover:bg-primary/20'}`}
+            disabled={isLoading}
+            className={`transition-all duration-300 ${
+              isActive ? 'bg-primary/20 hover:bg-primary/30 border-primary/50' : 'hover:bg-primary/20'
+            } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {isActive ? (
+            {isLoading ? (
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            ) : isActive ? (
               <CameraOff className="h-5 w-5" />
             ) : (
               <Camera className="h-5 w-5" />

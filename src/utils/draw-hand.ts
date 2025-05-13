@@ -47,16 +47,16 @@ export const drawHand = (hand: HandPose, ctx: CanvasRenderingContext2D) => {
     hand.landmarks[9].x, 
     hand.landmarks[9].y
   );
-  palmGradient.addColorStop(0, 'rgba(155, 135, 245, 0.3)');
-  palmGradient.addColorStop(1, 'rgba(155, 135, 245, 0.1)');
+  palmGradient.addColorStop(0, 'rgba(155, 135, 245, 0.4)'); // Increased opacity
+  palmGradient.addColorStop(1, 'rgba(155, 135, 245, 0.2)');
   ctx.fillStyle = palmGradient;
   ctx.fill();
   
-  // Palm stroke with glow
+  // Palm stroke with enhanced glow
   ctx.shadowColor = '#9b87f5';
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 15; // Increased blur
   ctx.strokeStyle = "#9b87f5";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5; // Slightly thicker line
   ctx.stroke();
   ctx.shadowBlur = 0;
   
@@ -66,15 +66,15 @@ export const drawHand = (hand: HandPose, ctx: CanvasRenderingContext2D) => {
     
     // Draw outer glow
     ctx.beginPath();
-    ctx.arc(landmark.x, landmark.y, 7, 0, 3 * Math.PI);
-    ctx.fillStyle = "rgba(155, 135, 245, 0.3)";
+    ctx.arc(landmark.x, landmark.y, 8, 0, 3 * Math.PI); // Slightly larger
+    ctx.fillStyle = "rgba(155, 135, 245, 0.4)"; // More opaque
     ctx.fill();
     
-    // Draw inner point with shadow
+    // Draw inner point with enhanced shadow
     ctx.shadowColor = '#9b87f5';
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 10; // Increased blur
     ctx.beginPath();
-    ctx.arc(landmark.x, landmark.y, 4, 0, 3 * Math.PI);
+    ctx.arc(landmark.x, landmark.y, 5, 0, 3 * Math.PI); // Slightly larger
     ctx.fillStyle = "#9b87f5";
     ctx.fill();
     ctx.shadowBlur = 0;
@@ -93,14 +93,14 @@ export const drawHand = (hand: HandPose, ctx: CanvasRenderingContext2D) => {
       const pointA = hand.landmarks[points[j]];
       const pointB = hand.landmarks[points[j + 1]];
       
-      // Draw path with glow effect
+      // Draw path with enhanced glow effect
       ctx.shadowColor = color;
-      ctx.shadowBlur = 5;
+      ctx.shadowBlur = 8; // Increased blur
       ctx.beginPath();
       ctx.moveTo(pointA.x, pointA.y);
       ctx.lineTo(pointB.x, pointB.y);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3.5; // Thicker line
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
