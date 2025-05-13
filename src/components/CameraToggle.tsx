@@ -1,5 +1,6 @@
+
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Camera, CameraOff } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -11,6 +12,21 @@ interface CameraToggleProps {
 export function CameraToggle({ onToggle }: CameraToggleProps) {
   const [isActive, setIsActive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Cleanup effect to ensure camera is properly turned off when component unmounts
+  useEffect(() => {
+    return () => {
+      // Try to stop any potentially active streams when component unmounts
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then(stream => {
+          stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(err => {
+          // Ignore errors since this is just cleanup
+        });
+    };
+  }, []);
 
   const toggleCamera = async () => {
     try {
@@ -23,17 +39,21 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
         // Show requesting permission toast
         toast.loading("Requesting camera access...", {
           id: "camera-permission",
-          duration: 10000
+          duration: 5000 // Reduced timeout for better UX
         });
         
         try {
           // Request camera permission explicitly but don't keep this stream
           const tempStream = await navigator.mediaDevices.getUserMedia({ 
-            video: true,
+            video: {
+              facingMode: "user",
+              width: { ideal: 640 },
+              height: { ideal: 480 }
+            },
             audio: false
           });
           
-          // Stop temporary stream right away
+          // Stop temporary stream right away after confirming access
           tempStream.getTracks().forEach(track => track.stop());
           
           // Dismiss loading toast

@@ -1,4 +1,3 @@
-
 import { useRef, useEffect, useState } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as handpose from '@tensorflow-models/handpose';
@@ -21,15 +20,20 @@ export function HandTracking({ isActive }: HandTrackingProps) {
   const [fingerCount, setFingerCount] = useState(0);
   const [bulbBrightness, setBulbBrightness] = useState<'off' | 'half' | 'full'>('off');
   
+  // Keep track of recent finger counts for smoothing
+  const fingerCountHistory = useRef<number[]>([]);
+  const maxHistoryLength = 5;
+  
   // Initialize TensorFlow.js first before loading the model
   useEffect(() => {
     const setupTf = async () => {
       try {
-        console.log("Setting up TensorFlow.js backend...");
-        // Make sure to initialize TensorFlow.js with the WebGL backend
-        await tf.setBackend('webgl');
-        await tf.ready();
-        console.log("TensorFlow backend initialized:", tf.getBackend());
+        if (!tf.getBackend()) {
+          console.log("Setting up TensorFlow.js backend...");
+          await tf.setBackend('webgl');
+          await tf.ready();
+          console.log("TensorFlow backend initialized:", tf.getBackend());
+        }
       } catch (error) {
         console.error("Failed to initialize TensorFlow backend:", error);
         toast.error("Failed to initialize machine learning engine");
@@ -50,10 +54,10 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         setLoading(true);
         console.log("Loading handpose model...");
         
-        // Load the handpose model with more reliable settings
+        // Load the handpose model with improved settings
         const handModel = await handpose.load({
-          detectionConfidence: 0.8,
-          maxContinuousChecks: 5,
+          detectionConfidence: 0.7, // Slightly lower for better detection
+          maxContinuousChecks: 10,
           iouThreshold: 0.3,
         });
         
@@ -108,14 +112,14 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       try {
         setLoading(true);
         
-        // Access the webcam with specific constraints
+        // Access the webcam with optimized constraints
         console.log("Requesting camera access...");
         const videoStream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             width: { ideal: 640 },
             height: { ideal: 480 },
             facingMode: "user",
-            frameRate: { max: 30 }
+            frameRate: { ideal: 30 }
           },
           audio: false
         });
@@ -167,32 +171,66 @@ export function HandTracking({ isActive }: HandTrackingProps) {
   // Hand detection and rendering
   useEffect(() => {
     let animationFrameId: number;
+    let lastDetectionTime = 0;
+    const detectionInterval = 50; // Detect hands every 50ms for smoother performance
     
-    // Count fingers based on hand landmarks
+    // Count fingers with improved algorithm
     const countFingers = (landmarks: { x: number; y: number; z: number }[]) => {
-      // Define finger tip and base indices
+      if (!landmarks || landmarks.length < 21) return 0;
+      
+      // Define finger tip and mid-joint indices
       const fingerTips = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky tips
-      const fingerBases = [2, 5, 9, 13, 17]; // thumb IP, and finger MCPs
+      const fingerMidJoints = [3, 7, 11, 15, 19]; // Mid joints (closer to tips)
+      const fingerBaseJoints = [2, 6, 10, 14, 18]; // Base joints (IP for thumb, PIP for others)
+      const wrist = landmarks[0]; // Wrist point
       
       let count = 0;
       
-      // Special case for thumb
-      const thumbTipX = landmarks[4].x;
-      const thumbBaseX = landmarks[2].x;
+      // Special case for thumb - compare with side of hand rather than vertical position
+      const thumbTip = landmarks[4];
+      const thumbIp = landmarks[3];
+      const thumbMcp = landmarks[2]; 
+      const indexMcp = landmarks[5]; // Index finger MCP joint
       
-      // Check if thumb is extended based on x position relative to base
-      const thumbDiff = Math.abs(thumbTipX - thumbBaseX);
-      if (thumbDiff > 0.05) {
+      // Vector from thumb MCP to index MCP (side of palm)
+      const sideVec = {
+        x: indexMcp.x - thumbMcp.x,
+        y: indexMcp.y - thumbMcp.y,
+        z: indexMcp.z - thumbMcp.z
+      };
+      
+      // Vector from thumb MCP to thumb tip
+      const thumbVec = {
+        x: thumbTip.x - thumbMcp.x,
+        y: thumbTip.y - thumbMcp.y,
+        z: thumbTip.z - thumbMcp.z
+      };
+      
+      // Calculate a rough angle by comparing x and y projection
+      const thumbSideDist = Math.sqrt(
+        Math.pow(thumbTip.x - indexMcp.x, 2) + 
+        Math.pow(thumbTip.y - indexMcp.y, 2)
+      );
+      
+      // If thumb is far enough from the side of the palm, count it
+      if (thumbSideDist > 0.08) {
         count++;
       }
       
-      // For other fingers, check if finger tip y is above finger base y
+      // Check other fingers
       for (let i = 1; i < fingerTips.length; i++) {
-        const tipY = landmarks[fingerTips[i]].y;
-        const baseY = landmarks[fingerBases[i]].y;
+        const tipIdx = fingerTips[i];
+        const midIdx = fingerMidJoints[i];
+        const baseIdx = fingerBaseJoints[i];
         
-        // If tip is higher than base (y decreases upward in image coordinates)
-        if (tipY < baseY - 0.07) {
+        const tip = landmarks[tipIdx];
+        const mid = landmarks[midIdx];
+        const base = landmarks[baseIdx];
+        
+        // Calculate if finger is extended by comparing y positions
+        // A finger is extended if the tip is higher (lower y value) than the MCP joint
+        // We also check that the tip is higher than the PIP joint
+        if (tip.y < mid.y - 0.03 && tip.y < base.y - 0.03) {
           count++;
         }
       }
@@ -200,11 +238,37 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       return count;
     };
     
+    // Apply smoothing to finger count
+    const smoothFingerCount = (currentCount: number) => {
+      // Add current count to history
+      fingerCountHistory.current.push(currentCount);
+      
+      // Keep history at specified length
+      if (fingerCountHistory.current.length > maxHistoryLength) {
+        fingerCountHistory.current.shift();
+      }
+      
+      // Get most frequent count from history
+      const countFrequency: Record<number, number> = {};
+      let maxFreq = 0;
+      let mostFrequentCount = currentCount;
+      
+      fingerCountHistory.current.forEach(count => {
+        countFrequency[count] = (countFrequency[count] || 0) + 1;
+        if (countFrequency[count] > maxFreq) {
+          maxFreq = countFrequency[count];
+          mostFrequentCount = count;
+        }
+      });
+      
+      return mostFrequentCount;
+    };
+    
     // Update bulb brightness based on finger count
     const updateBulbBrightness = (count: number) => {
       if (count === 0) {
         setBulbBrightness('off');
-      } else if (count >= 1 && count <= 4) {
+      } else if (count >= 1 && count <= 3) {
         setBulbBrightness('half');
       } else {
         setBulbBrightness('full');
@@ -213,7 +277,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       setFingerCount(count);
     };
     
-    // Detect hands
+    // Detect hands with performance optimization
     const detect = async () => {
       if (!videoRef.current || !canvasRef.current || !model || !isActive || loading) return;
       
@@ -230,13 +294,19 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       
-      // Get hand predictions
-      try {
-        const predictions = await model.estimateHands(video);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      const now = Date.now();
+      
+      // Only run detection at specified intervals for better performance
+      if (now - lastDetectionTime >= detectionInterval) {
+        lastDetectionTime = now;
         
-        // Draw hand landmarks
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
+        // Get hand predictions
+        try {
+          const predictions = await model.estimateHands(video);
+          
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           
           if (predictions.length > 0) {
@@ -253,16 +323,24 @@ export function HandTracking({ isActive }: HandTrackingProps) {
             // Draw the landmarks
             drawHand(hand, ctx);
             
-            // Count fingers and update bulb
-            const count = countFingers(hand.landmarks);
-            updateBulbBrightness(count);
+            // Count fingers and apply smoothing
+            const rawCount = countFingers(hand.landmarks);
+            const smoothedCount = smoothFingerCount(rawCount);
+            
+            // Update bulb based on smoothed count
+            updateBulbBrightness(smoothedCount);
           } else {
             // No hands detected, set bulb to off
             updateBulbBrightness(0);
+            // Clear finger history when no hand is detected
+            fingerCountHistory.current = [];
           }
+        } catch (error) {
+          console.error("Hand detection error:", error);
         }
-      } catch (error) {
-        console.error("Hand detection error:", error);
+      } else {
+        // On non-detection frames, just update the canvas with previous data
+        // This keeps animation smooth without detection overhead
       }
       
       // Continue detecting if active
@@ -288,6 +366,8 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
+      // Reset finger history when component is unmounted or detection stops
+      fingerCountHistory.current = [];
     };
   }, [isActive, model, loading]);
   
