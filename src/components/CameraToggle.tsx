@@ -1,6 +1,5 @@
-
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Camera, CameraOff } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -27,16 +26,15 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
           duration: 10000
         });
         
-        // Request camera permission explicitly
-        await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            width: 640, 
-            height: 480,
-            facingMode: "user"
-          } 
-        }).then(stream => {
-          // Stop this temporary stream
-          stream.getTracks().forEach(track => track.stop());
+        try {
+          // Request camera permission explicitly but don't keep this stream
+          const tempStream = await navigator.mediaDevices.getUserMedia({ 
+            video: true,
+            audio: false
+          });
+          
+          // Stop temporary stream right away
+          tempStream.getTracks().forEach(track => track.stop());
           
           // Dismiss loading toast
           toast.dismiss("camera-permission");
@@ -48,9 +46,10 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
           toast.success("Camera activated", {
             description: "Hand tracking is now active"
           });
-        }).catch(error => {
+        } catch (error) {
+          console.error("Camera permission error:", error);
           throw error;
-        });
+        }
       } else {
         // Turn off camera
         setIsActive(false);

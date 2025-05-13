@@ -21,71 +21,103 @@ export function HandTracking({ isActive }: HandTrackingProps) {
   const [fingerCount, setFingerCount] = useState(0);
   const [bulbBrightness, setBulbBrightness] = useState<'off' | 'half' | 'full'>('off');
   
-  // Load the model only once when component mounts
+  // Initialize TensorFlow.js first before loading the model
+  useEffect(() => {
+    const setupTf = async () => {
+      try {
+        console.log("Setting up TensorFlow.js backend...");
+        // Make sure to initialize TensorFlow.js with the WebGL backend
+        await tf.setBackend('webgl');
+        await tf.ready();
+        console.log("TensorFlow backend initialized:", tf.getBackend());
+      } catch (error) {
+        console.error("Failed to initialize TensorFlow backend:", error);
+        toast.error("Failed to initialize machine learning engine");
+      }
+    };
+    
+    setupTf();
+  }, []);
+  
+  // Load the model only after TensorFlow is ready and when component mounts
   useEffect(() => {
     let isMounted = true;
     
     const loadModel = async () => {
+      if (!isActive || modelLoaded || !tf.getBackend()) return;
+      
       try {
-        if (!modelLoaded) {
-          setLoading(true);
-          console.log("Loading handpose model...");
-          
-          // Load the handpose model
-          const handModel = await handpose.load({
-            detectionConfidence: 0.8,
-            maxContinuousChecks: 10,
-          });
-          
-          if (isMounted) {
-            console.log("Model loaded successfully");
-            setModel(handModel);
-            setModelLoaded(true);
-            setLoading(false);
-            toast.success("Hand tracking model loaded");
-          }
+        setLoading(true);
+        console.log("Loading handpose model...");
+        
+        // Load the handpose model with more reliable settings
+        const handModel = await handpose.load({
+          detectionConfidence: 0.8,
+          maxContinuousChecks: 5,
+          iouThreshold: 0.3,
+        });
+        
+        if (isMounted) {
+          console.log("Model loaded successfully");
+          setModel(handModel);
+          setModelLoaded(true);
+          setLoading(false);
+          toast.success("Hand tracking model loaded");
         }
       } catch (error) {
         console.error("Error loading model:", error);
         if (isMounted) {
           setLoading(false);
-          toast.error("Failed to load hand tracking model");
+          toast.error("Failed to load hand tracking model. Please try again.");
+          
+          // Force camera off on model load failure
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            setStream(null);
+          }
         }
       }
     };
     
-    loadModel();
+    // Only attempt to load the model when camera is active
+    if (isActive && !modelLoaded && tf.getBackend()) {
+      loadModel();
+    }
     
     return () => {
       isMounted = false;
     };
-  }, [modelLoaded]);
+  }, [isActive, modelLoaded, stream]);
   
   // Handle camera activation/deactivation
   useEffect(() => {
-    let animationFrameId: number;
     let isCameraMounted = true;
     
     const setupCamera = async () => {
       // Clean up previous stream if exists
       if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach(track => {
+          track.stop();
+        });
         setStream(null);
       }
       
+      // Only proceed if component is active
       if (!isActive) return;
       
       try {
         setLoading(true);
         
-        // Access the webcam with specific constraints to avoid flipping issues
+        // Access the webcam with specific constraints
         console.log("Requesting camera access...");
         const videoStream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             width: { ideal: 640 },
             height: { ideal: 480 },
-            facingMode: "user"
-          } 
+            facingMode: "user",
+            frameRate: { max: 30 }
+          },
+          audio: false
         });
         
         if (!isCameraMounted) {
@@ -97,8 +129,10 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         
         if (videoRef.current) {
           videoRef.current.srcObject = videoStream;
+          
+          // Wait for video to be ready
           videoRef.current.onloadedmetadata = () => {
-            if (videoRef.current) {
+            if (videoRef.current && isCameraMounted) {
               videoRef.current.play().then(() => {
                 console.log("Video is playing");
                 setLoading(false);
@@ -109,6 +143,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
               });
             }
           };
+          
           setStream(videoStream);
         }
       } catch (error) {
@@ -119,6 +154,19 @@ export function HandTracking({ isActive }: HandTrackingProps) {
     };
     
     setupCamera();
+    
+    return () => {
+      isCameraMounted = false;
+      // Clean up camera stream when component unmounts or isActive changes
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isActive]);
+  
+  // Hand detection and rendering
+  useEffect(() => {
+    let animationFrameId: number;
     
     // Count fingers based on hand landmarks
     const countFingers = (landmarks: { x: number; y: number; z: number }[]) => {
@@ -131,9 +179,8 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       // Special case for thumb
       const thumbTipX = landmarks[4].x;
       const thumbBaseX = landmarks[2].x;
-      const wristX = landmarks[0].x;
       
-      // Check if thumb is extended based on x position relative to wrist
+      // Check if thumb is extended based on x position relative to base
       const thumbDiff = Math.abs(thumbTipX - thumbBaseX);
       if (thumbDiff > 0.05) {
         count++;
@@ -145,7 +192,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         const baseY = landmarks[fingerBases[i]].y;
         
         // If tip is higher than base (y decreases upward in image coordinates)
-        if (tipY < baseY - 0.07) { // Increased threshold to avoid false positives
+        if (tipY < baseY - 0.07) {
           count++;
         }
       }
@@ -168,7 +215,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
     
     // Detect hands
     const detect = async () => {
-      if (!videoRef.current || !canvasRef.current || !model || !isActive) return;
+      if (!videoRef.current || !canvasRef.current || !model || !isActive || loading) return;
       
       const video = videoRef.current;
       const canvas = canvasRef.current;
@@ -191,8 +238,6 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
-          // Don't mirror the camera feed - let the skeleton overlay on the actual video
           
           if (predictions.length > 0) {
             // Convert to our HandPose interface
@@ -221,13 +266,13 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       }
       
       // Continue detecting if active
-      if (isActive) {
+      if (isActive && !loading) {
         animationFrameId = requestAnimationFrame(detect);
       }
     };
     
-    // Start detection when video is loaded
-    if (isActive && model && videoRef.current) {
+    // Start detection when video is loaded and model is ready
+    if (isActive && model && videoRef.current && !loading) {
       const video = videoRef.current;
       
       if (video.readyState >= 2) {
@@ -240,12 +285,11 @@ export function HandTracking({ isActive }: HandTrackingProps) {
     }
     
     return () => {
-      isCameraMounted = false;
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [isActive, model, stream]);
+  }, [isActive, model, loading]);
   
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border border-white/20 bg-gradient-to-br from-gray-900/60 to-gray-900/80 backdrop-blur-md">
@@ -278,7 +322,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       )}
       
       {/* Digital Bulb */}
-      {isActive && !loading && (
+      {isActive && (
         <DigitalBulb brightness={bulbBrightness} />
       )}
       
