@@ -38,7 +38,22 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
     try {
       // Request camera permission explicitly before toggling
       if (!isActive) {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // Show requesting permission toast
+        toast.loading("Requesting camera access...", {
+          id: "camera-permission",
+          duration: 10000
+        });
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: 640, 
+            height: 480,
+            facingMode: "user"
+          } 
+        });
+        
+        // Dismiss requesting permission toast
+        toast.dismiss("camera-permission");
         
         // If we got here, permission was granted
         setHasPermission(true);
@@ -66,6 +81,9 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
     } catch (error) {
       console.error("Error accessing camera:", error);
       setHasPermission(false);
+      
+      // Dismiss requesting permission toast
+      toast.dismiss("camera-permission");
       
       toast.error("Camera access denied", {
         description: "Please allow camera access to use hand tracking",

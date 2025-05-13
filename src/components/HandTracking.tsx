@@ -20,26 +20,28 @@ export function HandTracking({ isActive }: HandTrackingProps) {
   const [fingerCount, setFingerCount] = useState(0);
   const [bulbBrightness, setBulbBrightness] = useState<'off' | 'half' | 'full'>('off');
   
-  // Load the model once when component mounts
+  // Load the model once component mounts
   useEffect(() => {
     let isMounted = true;
     
     const loadModel = async () => {
       try {
-        setLoading(true);
-        console.log("Loading handpose model...");
-        
-        // Load the handpose model
-        const handModel = await handpose.load({
-          detectionConfidence: 0.7,
-          maxContinuousChecks: 20,
-        });
-        
-        if (isMounted) {
-          console.log("Model loaded successfully");
-          setModel(handModel);
-          setModelLoaded(true);
-          setLoading(false);
+        if (!modelLoaded) {
+          setLoading(true);
+          console.log("Loading handpose model...");
+          
+          // Load the handpose model
+          const handModel = await handpose.load({
+            detectionConfidence: 0.7,
+            maxContinuousChecks: 20,
+          });
+          
+          if (isMounted) {
+            console.log("Model loaded successfully");
+            setModel(handModel);
+            setModelLoaded(true);
+            setLoading(false);
+          }
         }
       } catch (error) {
         console.error("Error loading model:", error);
@@ -49,15 +51,14 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       }
     };
     
-    // Only load the model after camera access is granted
-    if (isActive && stream) {
+    if (isActive) {
       loadModel();
     }
     
     return () => {
       isMounted = false;
     };
-  }, [isActive, stream]);
+  }, [isActive, modelLoaded]);
   
   // Handle camera activation/deactivation
   useEffect(() => {
@@ -205,10 +206,17 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       }
     };
     
+    // Start detection when video is loaded
     if (isActive && model && videoRef.current) {
-      videoRef.current.addEventListener('loadeddata', () => {
+      const video = videoRef.current;
+      
+      if (video.readyState >= 2) {
         detect();
-      });
+      } else {
+        video.addEventListener('loadeddata', () => {
+          detect();
+        });
+      }
     }
     
     return () => {
@@ -244,13 +252,13 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       
       {/* Finger count display */}
       {isActive && model && !loading && (
-        <div className="absolute bottom-4 left-4 bg-black/40 text-white px-3 py-1 rounded-lg backdrop-blur-sm z-20">
-          <span className="text-sm">Fingers: {fingerCount}</span>
+        <div className="absolute bottom-4 left-4 bg-black/50 text-white px-3 py-1.5 rounded-lg backdrop-blur-sm z-20">
+          <span className="text-sm font-medium">Fingers: {fingerCount}</span>
         </div>
       )}
       
-      {/* Digital Bulb */}
-      {isActive && model && !loading && (
+      {/* Digital Bulb - Now more prominent */}
+      {isActive && !loading && (
         <DigitalBulb brightness={bulbBrightness} />
       )}
       

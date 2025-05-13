@@ -35,14 +35,14 @@ export function DigitalBulb({ brightness }: DigitalBulbProps) {
 
   return (
     <div className="absolute top-4 right-4 flex flex-col items-center z-20">
-      <div className={`relative p-4 rounded-full transition-all duration-300 ${glowClass}`}>
+      <div className={`relative p-6 rounded-full transition-all duration-300 ${glowClass}`}>
         <Lightbulb 
-          className={`h-8 w-8 transition-all duration-300 ${iconClass}`} 
+          className={`h-12 w-12 transition-all duration-300 ${iconClass}`} 
           strokeWidth={1.5}
         />
-        <div className={`absolute inset-0 rounded-full blur-xl ${glowClass} -z-10 opacity-70`}></div>
+        <div className={`absolute inset-0 rounded-full blur-xl ${glowClass} -z-10 opacity-80`}></div>
       </div>
-      <span className="text-xs mt-1 text-white font-semibold bg-black/40 px-2 py-1 rounded-md backdrop-blur-sm">
+      <span className="text-sm mt-1 text-white font-semibold bg-black/50 px-3 py-1.5 rounded-md backdrop-blur-sm">
         {label}
       </span>
     </div>
