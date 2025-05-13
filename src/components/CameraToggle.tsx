@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Camera, CameraOff } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 interface CameraToggleProps {
   onToggle: (isActive: boolean) => void;
@@ -11,30 +12,63 @@ interface CameraToggleProps {
 
 export function CameraToggle({ onToggle }: CameraToggleProps) {
   const [isActive, setIsActive] = useState(false);
-  const { toast } = useToast();
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const { toast: uiToast } = useToast();
+
+  // Check camera permissions on component mount
+  useEffect(() => {
+    const checkCameraPermission = async () => {
+      try {
+        // Request camera permission explicitly
+        const permissions = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        setHasPermission(permissions.state === 'granted');
+        
+        permissions.onchange = () => {
+          setHasPermission(permissions.state === 'granted');
+        };
+      } catch (error) {
+        console.log('Permissions API not supported, will check on toggle');
+      }
+    };
+    
+    checkCameraPermission();
+  }, []);
 
   const toggleCamera = async () => {
     try {
       // Request camera permission explicitly before toggling
       if (!isActive) {
-        await navigator.mediaDevices.getUserMedia({ video: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        
+        // If we got here, permission was granted
+        setHasPermission(true);
+        
+        // Stop this temporary stream since the HandTracking component will request its own
+        stream.getTracks().forEach(track => track.stop());
+        
+        const newState = true;
+        setIsActive(newState);
+        onToggle(newState);
+        
+        toast.success("Camera activated", {
+          description: "Hand tracking is now active"
+        });
+      } else {
+        // Turn off camera
+        const newState = false;
+        setIsActive(newState);
+        onToggle(newState);
+        
+        toast.info("Camera deactivated", {
+          description: "Hand tracking is now disabled"
+        });
       }
-      
-      const newState = !isActive;
-      setIsActive(newState);
-      onToggle(newState);
-      
-      toast({
-        title: newState ? "Camera activated" : "Camera deactivated",
-        description: newState ? "Hand tracking is now active" : "Hand tracking is now disabled",
-        duration: 2000,
-      });
     } catch (error) {
       console.error("Error accessing camera:", error);
-      toast({
-        title: "Camera access denied",
+      setHasPermission(false);
+      
+      toast.error("Camera access denied", {
         description: "Please allow camera access to use hand tracking",
-        variant: "destructive",
         duration: 5000,
       });
     }
@@ -49,7 +83,7 @@ export function CameraToggle({ onToggle }: CameraToggleProps) {
             size="icon"
             onClick={toggleCamera}
             className={`transition-all duration-300 ${isActive ? 
-              'bg-primary/20 hover:bg-primary/30' : 
+              'bg-primary/20 hover:bg-primary/30 border-primary/50' : 
               'hover:bg-primary/20'}`}
           >
             {isActive ? (

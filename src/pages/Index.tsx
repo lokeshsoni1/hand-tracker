@@ -22,13 +22,13 @@ const themeOptions = [
     textClasses: "from-primary to-purple-400" },
   { id: "cyberpunk", name: "Cyberpunk", 
     classes: "from-purple-900 to-pink-600", 
-    textClasses: "from-yellow-300 to-pink-500" },
+    textClasses: "cyberpunk-text" },
   { id: "neon", name: "Neon", 
     classes: "from-black to-blue-900", 
-    textClasses: "from-green-400 to-blue-500" },
+    textClasses: "neon-text" },
   { id: "gradient", name: "Gradient", 
-    classes: "from-indigo-500 via-purple-500 to-pink-500", 
-    textClasses: "from-yellow-200 to-yellow-500" }
+    classes: "animated-gradient", 
+    textClasses: "gradient-text" }
 ];
 
 const Index = () => {
@@ -37,15 +37,15 @@ const Index = () => {
   const { theme } = useTheme();
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in bg-gradient-to-br ${currentTheme.classes}`}>
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in bg-gradient-to-br ${currentTheme.classes} transition-all duration-500`}>
       <main className="container max-w-4xl mx-auto px-4 py-8">
         <div className="flex flex-col items-center justify-center mb-8">
           <div className="flex items-center justify-center space-x-2 mb-2">
-            <Sparkles className="h-6 w-6 text-primary" />
-            <h1 className={`text-4xl font-bold text-center bg-gradient-to-r ${currentTheme.textClasses} bg-clip-text text-transparent`}>
+            <Sparkles className="h-6 w-6 text-primary animate-pulse" />
+            <h1 className={`text-4xl font-bold text-center ${currentTheme.textClasses}`}>
               Lokesh Yantra
             </h1>
-            <Sparkles className="h-6 w-6 text-primary" />
+            <Sparkles className="h-6 w-6 text-primary animate-pulse" />
           </div>
           <p className="text-muted-foreground text-center max-w-md">
             Interactive hand tracking demo powered by TensorFlow.js and computer vision
@@ -59,7 +59,7 @@ const Index = () => {
               variant={currentTheme.id === option.id ? "default" : "outline"}
               size="sm"
               onClick={() => setCurrentTheme(option)}
-              className="text-xs"
+              className="text-xs hover-scale"
             >
               {option.name}
             </Button>
@@ -70,11 +70,11 @@ const Index = () => {
           <div className="lg:col-span-2">
             <Card className={`glass-card overflow-hidden border border-white/10 shadow-xl h-full ${theme === 'dark' ? 'neo-blur' : 'glass-morphism'}`}>
               <CardHeader className="bg-gradient-to-r from-background/50 to-background/80 backdrop-blur-sm">
-                <CardTitle className={`text-center bg-gradient-to-r ${currentTheme.textClasses} bg-clip-text text-transparent`}>
+                <CardTitle className={`text-center ${currentTheme.textClasses}`}>
                   Hand Tracking Demo
                 </CardTitle>
                 <CardDescription className="text-center">
-                  Wave your hand in front of the camera to see real-time tracking
+                  Wave your hand in front of the camera to control the digital bulb
                 </CardDescription>
               </CardHeader>
               
@@ -94,7 +94,7 @@ const Index = () => {
           <div className="flex flex-col gap-4">
             <Card className={`glass-card border border-white/10 shadow-xl ${theme === 'dark' ? 'neo-blur' : 'glass-morphism'}`}>
               <CardHeader>
-                <CardTitle className={`text-base font-medium bg-gradient-to-r ${currentTheme.textClasses} bg-clip-text text-transparent`}>
+                <CardTitle className={`text-base font-medium ${currentTheme.textClasses}`}>
                   Skills
                 </CardTitle>
               </CardHeader>
@@ -151,11 +151,22 @@ const Index = () => {
             
             <Card className={`glass-card border border-white/10 shadow-xl ${theme === 'dark' ? 'neo-blur' : 'glass-morphism'}`}>
               <CardHeader className="pb-2">
-                <CardTitle className={`text-base font-medium bg-gradient-to-r ${currentTheme.textClasses} bg-clip-text text-transparent`}>
+                <CardTitle className={`text-base font-medium ${currentTheme.textClasses}`}>
                   About Me
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
+                <div className="flex items-center gap-3 mb-3">
+                  <img 
+                    src="/lovable-uploads/f48342e9-533a-4e5a-a5e3-0885b98a58dd.png" 
+                    alt="Profile" 
+                    className="w-16 h-16 rounded-full object-cover border-2 border-primary/50"
+                  />
+                  <div>
+                    <h3 className="text-sm font-medium">Lokesh Soni</h3>
+                    <p className="text-xs text-muted-foreground">Hand Tracking Specialist</p>
+                  </div>
+                </div>
                 <p className="text-sm text-muted-foreground mb-3">
                   Hand tracking specialist with expertise in computer vision and machine learning technologies. Passionate about creating interactive experiences using cutting-edge AI models.
                 </p>

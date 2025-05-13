@@ -4,6 +4,7 @@ import * as tf from '@tensorflow/tfjs';
 import * as handpose from '@tensorflow-models/handpose';
 import { drawHand, HandPose, convertAnnotationsToKeypoints } from '../utils/draw-hand';
 import { Loader2 } from 'lucide-react';
+import { DigitalBulb } from './DigitalBulb';
 
 interface HandTrackingProps {
   isActive: boolean;
@@ -16,6 +17,8 @@ export function HandTracking({ isActive }: HandTrackingProps) {
   const [loading, setLoading] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [model, setModel] = useState<handpose.HandPose | null>(null);
+  const [fingerCount, setFingerCount] = useState(0);
+  const [bulbBrightness, setBulbBrightness] = useState<'off' | 'half' | 'full'>('off');
   
   // Load the model once when component mounts
   useEffect(() => {
@@ -46,14 +49,15 @@ export function HandTracking({ isActive }: HandTrackingProps) {
       }
     };
     
-    if (isActive) {
+    // Only load the model after camera access is granted
+    if (isActive && stream) {
       loadModel();
     }
     
     return () => {
       isMounted = false;
     };
-  }, [isActive]);
+  }, [isActive, stream]);
   
   // Handle camera activation/deactivation
   useEffect(() => {
@@ -88,16 +92,6 @@ export function HandTracking({ isActive }: HandTrackingProps) {
           setStream(videoStream);
         }
         
-        // Only start loading model after camera is ready
-        if (!model) {
-          const handModel = await handpose.load({
-            detectionConfidence: 0.7,
-            maxContinuousChecks: 20,
-          });
-          setModel(handModel);
-          setModelLoaded(true);
-        }
-        
         setLoading(false);
       } catch (error) {
         console.error("Error accessing camera:", error);
@@ -106,6 +100,52 @@ export function HandTracking({ isActive }: HandTrackingProps) {
     };
     
     setupCamera();
+    
+    // Count fingers based on hand landmarks
+    const countFingers = (landmarks: { x: number; y: number; z: number }[]) => {
+      // Define finger tip and base indices
+      const fingerTips = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky tips
+      const fingerBases = [2, 5, 9, 13, 17]; // thumb IP, and finger MCPs
+      
+      let count = 0;
+      
+      // Special case for thumb
+      const thumbTipX = landmarks[4].x;
+      const thumbBaseX = landmarks[2].x;
+      const wristX = landmarks[0].x;
+      
+      // Check if thumb is extended based on x position relative to wrist
+      if ((wristX < thumbBaseX && thumbTipX < thumbBaseX) || 
+          (wristX > thumbBaseX && thumbTipX > thumbBaseX)) {
+        count++;
+      }
+      
+      // For other fingers, check if finger tip y is above finger base y
+      for (let i = 1; i < fingerTips.length; i++) {
+        const tipY = landmarks[fingerTips[i]].y;
+        const baseY = landmarks[fingerBases[i]].y;
+        
+        // If tip is higher than base (y decreases upward in image coordinates)
+        if (tipY < baseY - 0.05) { // Adding threshold to avoid false positives
+          count++;
+        }
+      }
+      
+      return count;
+    };
+    
+    // Update bulb brightness based on finger count
+    const updateBulbBrightness = (count: number) => {
+      if (count === 0) {
+        setBulbBrightness('off');
+      } else if (count >= 1 && count <= 4) {
+        setBulbBrightness('half');
+      } else {
+        setBulbBrightness('full');
+      }
+      
+      setFingerCount(count);
+    };
     
     // Detect hands
     const detect = async () => {
@@ -146,6 +186,13 @@ export function HandTracking({ isActive }: HandTrackingProps) {
             
             // Draw the landmarks
             drawHand(hand, ctx);
+            
+            // Count fingers and update bulb
+            const count = countFingers(hand.landmarks);
+            updateBulbBrightness(count);
+          } else {
+            // No hands detected, set bulb to off
+            updateBulbBrightness(0);
           }
         }
       } catch (error) {
@@ -169,7 +216,7 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [isActive, model]);
+  }, [isActive, model, stream]);
   
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border border-white/20 bg-gradient-to-br from-gray-900/60 to-gray-900/80 backdrop-blur-md">
@@ -186,11 +233,27 @@ export function HandTracking({ isActive }: HandTrackingProps) {
         autoPlay
         playsInline
         muted
+        onCanPlay={() => {
+          console.log("Video can play, dimensions:", videoRef.current?.videoWidth, videoRef.current?.videoHeight);
+        }}
       />
       <canvas
         ref={canvasRef}
         className="absolute top-0 left-0 h-full w-full object-cover rounded-lg"
       />
+      
+      {/* Finger count display */}
+      {isActive && model && !loading && (
+        <div className="absolute bottom-4 left-4 bg-black/40 text-white px-3 py-1 rounded-lg backdrop-blur-sm z-20">
+          <span className="text-sm">Fingers: {fingerCount}</span>
+        </div>
+      )}
+      
+      {/* Digital Bulb */}
+      {isActive && model && !loading && (
+        <DigitalBulb brightness={bulbBrightness} />
+      )}
+      
       {!isActive && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 rounded-lg backdrop-blur-sm">
           <div className="text-center">
